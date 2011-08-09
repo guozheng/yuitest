@@ -8,17 +8,18 @@
 package com.yahoo.platform.yuitest.coverage;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.nio.channels.FileChannel;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
 import org.antlr.runtime.RecognitionException;
-
-import org.apache.commons.io.FileUtils;
 
 
 /**
@@ -75,12 +76,12 @@ public class DirectoryInstrumenter {
     }
 
     /**
-     * Copy files and directories excluded for instrumenation to destination directory.
+     * Copy files and directories excluded for instrumentation to destination directory.
      * @param inputDir String The source directory containing the excluded file or directory
      * @param outputDir String The destination directory
      * @param excludes HashSet A HashSet containing the file and directory paths to exclude from instrumentation.
      * 		These paths are in the form of inputDir+filename/dirname.
-     * @throws IOException various IO errors including null or invalid source, destination, etc.
+     * @throws IOException Various IO errors including null or invalid source, destination, etc.
      */
     private static void copyExcludes(String inputDir, String outputDir, HashSet<String> excludes) throws IOException {
     	//copy files and directories excluded for instrumentation, need them to run tests properly
@@ -96,11 +97,66 @@ public class DirectoryInstrumenter {
         	f = new File(name);
         	if (f.isFile()) {
         		System.out.println("copying skipped file " + name + " to " + destName);
-        		FileUtils.copyFile(f, new File(destName));
+        		DirectoryInstrumenter.copyFile(f, new File(destName));
         	} else if (f.isDirectory()) {
         		System.out.println("copying skipped directory " + name + " to " + destName);
-        		FileUtils.copyDirectory(f, new File(destName));
+        		DirectoryInstrumenter.copyDirectory(f, new File(destName));
         	}
+        }
+    }
+    
+    /**
+     * Copy a file.
+     * @param srcFile File The source file
+     * @param destFile File The destination file, it will be created if not exists yet
+     * @throws IOException Various IO errors including invalid source file, etc.
+     */
+    private static void copyFile(File srcFile, File destFile) throws IOException {
+        if (!srcFile.exists() || !srcFile.isFile()) {
+            throw new IOException("src file does not exist or is not a file");
+        }
+        
+        if (!destFile.exists()) {
+            destFile.createNewFile();
+        }
+        
+        FileChannel src = null;
+        FileChannel dest = null;
+        try {
+            src = new FileInputStream(srcFile).getChannel();
+            dest = new FileOutputStream(destFile).getChannel();
+            dest.transferFrom(src, 0, src.size());
+        }finally {
+            if (src != null) {
+                src.close();
+            }
+            if (dest != null) {
+                dest.close();
+            }
+        }  
+    }
+    
+    /**
+     * Copy a directory recursively.
+     * @param src File The source directory
+     * @param dest File The destination directory, it will be created if not exists yet
+     * @throws IOException Various IO errors including invalid source directory, etc.
+     */
+    private static void copyDirectory(File src, File dest) throws IOException {
+        if (!src.exists()) {
+            throw new IOException("src file or directory does not exist");
+        } else if (src.isFile()) {
+            DirectoryInstrumenter.copyFile(src, dest);
+        } else {
+            if (!dest.exists()) {
+                dest.mkdir();
+            }
+            
+            // child filenames
+            String[] children = src.list();
+            for (int i = 0; i < children.length; i++) {
+                copyDirectory(new File(src, children[i]), new File(dest, children[i]));
+            }
         }
     }
 
